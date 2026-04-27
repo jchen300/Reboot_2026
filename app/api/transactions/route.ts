@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getTransactionsCollection, type Direction, type TransactionDoc } from "@/models/transaction";
 import { parseLocalDateTime } from "@/lib/date";
+import { ObjectId } from "mongodb";
 
 export async function GET() {
   const col = await getTransactionsCollection();
@@ -59,5 +60,43 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error("POST Error:", error);
     return NextResponse.json({ error: "儲存失敗" }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    const col = await getTransactionsCollection();
+    
+    // 嘗試從 URL 獲取單筆 ID (?id=xxx)
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+
+    // 1. 處理單筆刪除
+    if (id) {
+      const result = await col.deleteOne({ _id: new ObjectId(id) });
+      return NextResponse.json({ 
+        success: result.deletedCount === 1,
+        message: result.deletedCount === 1 ? "刪除成功" : "找不到該筆資料"
+      });
+    }
+
+    // 2. 處理批量刪除 (從 Body 獲取 ids 陣列)
+    const body = await req.json().catch(() => ({}));
+    const { ids } = body as { ids: string[] };
+
+    if (Array.isArray(ids) && ids.length > 0) {
+      const objectIds = ids.map((i) => new ObjectId(i));
+      const result = await col.deleteMany({ _id: { $in: objectIds } });
+      return NextResponse.json({ 
+        success: true, 
+        count: result.deletedCount,
+        message: `成功刪除 ${result.deletedCount} 筆資料`
+      });
+    }
+
+    return NextResponse.json({ error: "請提供要刪除的 ID" }, { status: 400 });
+  } catch (error) {
+    console.error("Delete Error:", error);
+    return NextResponse.json({ error: "刪除操作失敗" }, { status: 500 });
   }
 }
