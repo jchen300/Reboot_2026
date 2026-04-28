@@ -15,6 +15,7 @@ export type TransactionDoc = {
   importBatchId?: string;
   filename?: string;
   createdAt: Date;
+  category: string;
 };
 
 export async function getDb(): Promise<Db> {
