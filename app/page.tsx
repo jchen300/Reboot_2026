@@ -1,25 +1,21 @@
 "use client";
 
-import { useEffect } from "react";
 import { useTransactions } from "@/hooks/use-transactions";
-import { TransactionTable } from "@/app/components/TransactionTable"; // 💡 確認路徑正確
+import { TransactionTable } from "@/app/components/TransactionTable";
 import { AddTransactionForm } from "@/app/components/AddTransactionForm";
 import { FileImporter } from "@/app/components/FileImporter";
 import { useAuth } from "@/context/AuthContext";
 
 export default function Page() {
-  const { token, loading: authLoading } = useAuth();
+  const { authLoading } = useAuth();
   
-  // 假設 useTransactions 內部會根據傳入的 token 進行 fetch
+  // 💡 現在數據獲取是自動化的，不再需要依賴 useEffect 手動 refresh
   const { rows, loading: dataLoading, refresh } = useTransactions();
 
-  // 頁面載入或 Token 改變時刷新數據
-  useEffect(() => {
-
-    if (!authLoading && token) {
-      refresh();
-    }
-  }, [token, authLoading, refresh]);
+  // 如果正在驗證身分，顯示簡單的加載狀態
+  if (authLoading) {
+    return <div className="p-10 text-center text-zinc-400">驗證身分中...</div>;
+  }
 
   return (
     <main className="min-h-screen bg-zinc-50 text-zinc-900">
@@ -32,7 +28,7 @@ export default function Page() {
               帳單管理系統
             </h1>
             
-            {/* 新增表單 */}
+            {/* 💡 當新增成功後，呼叫 refresh (mutate) 讓 SWR 更新全站數據 */}
             <AddTransactionForm onSuccess={refresh} />
             
             <div className="border-t border-zinc-100 pt-4">
@@ -43,9 +39,11 @@ export default function Page() {
 
           {/* 數據列表區 */}
           <div className="mt-4">
-            
-            <TransactionTable rows={rows} onDataChange={refresh} />
-    
+            {dataLoading && rows?.length === 0 ? (
+              <div className="p-10 text-center text-zinc-400">讀取數據中...</div>
+            ) : (
+              <TransactionTable rows={rows} onDataChange={refresh} />
+            )}
           </div>
 
         </div>

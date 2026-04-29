@@ -3,6 +3,8 @@ import "./globals.css"; // 確保導入你的 CSS
 import { AuthProvider } from "@/context/AuthContext";
 import { Inter } from "next/font/google";
 import { Navbar } from "@/app/components/NavBar";
+import { Sidebar } from "@/app/components/Sidebar";
+import { Providers } from "@/app/providers";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -21,13 +23,18 @@ export default function RootLayout({
       <body className={inter.className}>
         {/* 💡 這裡最關鍵：所有組件都必須在 Provider 內部 */}
         <AuthProvider>
-          <Navbar /> {/* 💡 放在這裡，所有頁面都會顯示 Navbar */}
-          <div className="min-h-screen bg-zinc-50">
-            {/* 你可以在這裡放 Navbar，它也會自動獲得 Auth 狀態 */}
-            <main className="mx-auto max-w-5xl p-4">
-              {children}
-            </main>
-          </div>
+          <Providers>
+            <div className="flex h-screen overflow-hidden">
+              {/* 左側導航欄 - 它是佈局的一部分 */}
+              <aside className="hidden md:flex w-64 flex-col bg-gray-900">
+                <Sidebar /> 
+              </aside>
+              {/* 右側主要內容 */}
+              <main className="flex-1 overflow-y-auto">
+                {children}
+              </main>
+            </div>
+          </Providers>
         </AuthProvider>
       </body>
     </html>

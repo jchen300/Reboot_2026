@@ -11,15 +11,18 @@ interface TransactionTableProps {
   onDataChange: () => Promise<void>;
 }
 
-export function TransactionTable({ rows, onDataChange }: TransactionTableProps) {
-  const { deleteOne, deleteMany, loading: isActionLoading } = useTransactions();
+export function TransactionTable({ rows=[], onDataChange }: TransactionTableProps) {
+  const { deleteOne, deleteMany } = useTransactions();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-
+  const [isLocalBusy, setIsLocalBusy] = useState(false); // 💡 增加本地的 loading 狀態
   // 1. 計算合計金額 (Memoized 避免不必要重算)
   const total = useMemo(() => {
+
     return rows.reduce((sum, r) => {
       const sign = r.direction === "income" ? 1 : -1;
-      return sum + sign * (Number.isFinite(r.amount) ? r.amount : 0);
+      // 💡 確保 r.amount 存在，不然會變成 NaN
+      const amount = Number(r.amount) || 0; 
+      return sum + sign * amount;
     }, 0);
   }, [rows]);
 
@@ -38,14 +41,18 @@ export function TransactionTable({ rows, onDataChange }: TransactionTableProps) 
   const handleDelete = async (ids: string[]) => {
     const isBatch = ids.length > 1;
     if (!confirm(isBatch ? `確定要批量刪除 ${ids.length} 筆資料嗎？` : "確定要刪除此筆資料嗎？")) return;
-
-    const success = isBatch ? await deleteMany(ids) : await deleteOne(ids[0]);
-    
-    if (success) {
-      setSelectedIds([]); // 清空勾選
-      await onDataChange(); // 通知父組件刷新
-    } else {
-      alert("刪除失敗，請稍後再試");
+    setIsLocalBusy(true); // 開始動作 
+    try{
+      const success = isBatch ? await deleteMany(ids) : await deleteOne(ids[0]);
+      
+      if (success) {
+        setSelectedIds([]); // 清空勾選
+        await onDataChange(); // 通知父組件刷新
+      } else {
+        alert("刪除失敗，請稍後再試");
+      }
+    }finally {
+      setIsLocalBusy(false); // 結束動作
     }
   };
 
@@ -56,7 +63,7 @@ export function TransactionTable({ rows, onDataChange }: TransactionTableProps) 
   };
 
   // 空狀態處理
-  if (rows.length === 0) {
+  if (rows?.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-zinc-400 border-2 border-dashed border-zinc-200 rounded-2xl bg-zinc-50/30">
         <AlertCircle size={40} className="mb-3 opacity-20" />
@@ -67,7 +74,7 @@ export function TransactionTable({ rows, onDataChange }: TransactionTableProps) 
   }
 
   return (
-    <div className={`relative space-y-3 ${isActionLoading ? "pointer-events-none select-none" : ""}`}>
+    <div className={`relative space-y-3 ${isLocalBusy ? "pointer-events-none select-none" : ""}`}>
       
       {/* Sticky 工具列 */}
       <div className="sticky top-0 z-20 bg-white/90 backdrop-blur-md py-3 px-2 border-b border-zinc-100 flex items-center justify-between transition-all rounded-t-xl">
@@ -75,7 +82,7 @@ export function TransactionTable({ rows, onDataChange }: TransactionTableProps) 
           <div>
             <span className="text-[10px] text-zinc-400 font-black uppercase tracking-tighter block">Snapshot</span>
             <div className="text-sm text-zinc-600 font-medium">
-              <span className="text-zinc-900">{rows.length}</span> Transactions
+              <span className="text-zinc-900">{rows?.length}</span> Transactions
             </div>
           </div>
 
@@ -85,7 +92,7 @@ export function TransactionTable({ rows, onDataChange }: TransactionTableProps) 
               <div className="h-6 w-[1px] bg-zinc-200 mx-1" />
               <button
                 onClick={() => handleDelete(selectedIds)}
-                disabled={isActionLoading}
+                disabled={isLocalBusy}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 text-white rounded-lg text-xs font-bold hover:bg-rose-700 transition-all shadow-md active:scale-95 disabled:opacity-50"
               >
                 <Trash2 size={13} />
@@ -104,13 +111,13 @@ export function TransactionTable({ rows, onDataChange }: TransactionTableProps) 
         <div className="text-right">
           <span className="text-[10px] text-zinc-400 font-black uppercase tracking-tighter block">Net Flow</span>
           <span className={`text-xl font-black tabular-nums tracking-tighter ${total < 0 ? "text-rose-500" : "text-emerald-500"}`}>
-            {total >= 0 ? `+${total.toLocaleString()}` : total.toLocaleString()}
+            {total >= 0 ? `+${total?.toLocaleString()}` : total.toLocaleString()}
           </span>
         </div>
       </div>
 
       {/* 表格容器 */}
-      <div className={`overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm transition-opacity ${isActionLoading ? "opacity-60" : "opacity-100"}`}>
+      <div className={`overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm transition-opacity ${isLocalBusy ? "opacity-60" : "opacity-100"}`}>
         <div className="max-h-[60vh] overflow-auto scrollbar-hide">
           <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
             <thead className="sticky top-0 bg-zinc-50/80 backdrop-blur-sm z-10">
@@ -174,7 +181,7 @@ export function TransactionTable({ rows, onDataChange }: TransactionTableProps) 
                     <td className="px-4 py-4 text-center">
                       <button
                         onClick={() => handleDelete([r._id])}
-                        disabled={isActionLoading}
+                        disabled={isLocalBusy}
                         className="p-2 text-zinc-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
                       >
                         <Trash2 size={14} />

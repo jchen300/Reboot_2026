@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 async function getAuthenticatedUser(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
-  const token = authHeader?.split(" ")[1]; // 預期格式: "Bearer user_001"
+  // const token = authHeader?.split(" ")[1]; // 預期格式: "Bearer user_001"
+  const token = 'user_001'; // 目前先硬編，之後會改成從 Header 拿
   
   if (!token) return null;
   

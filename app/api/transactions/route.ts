@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse, NextRequest } from "next/server";
 
 import { getTransactionsCollection, type Direction, type TransactionDoc } from "@/models/transaction";

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { formatDateTime } from "@/lib/format";
 import { useAuth } from "@/context/AuthContext";
+import { useSWRConfig } from "swr";
 
 interface AddTransactionFormProps {
   onSuccess: () => Promise<void>;
@@ -11,6 +12,7 @@ interface AddTransactionFormProps {
 export function AddTransactionForm({ onSuccess }: AddTransactionFormProps) {
   const { user, token } = useAuth();
   const [loading, setLoading] = useState(false);
+  const { mutate } = useSWRConfig();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -49,6 +51,8 @@ export function AddTransactionForm({ onSuccess }: AddTransactionFormProps) {
       if (!res.ok) throw new Error("儲存失敗");
 
       form.reset();      // 💡 一鍵清空所有輸入框
+      mutate(['/api/transactions', token]);
+      mutate(['/api/stats/categories', token]);
       await onSuccess(); // 重新整理列表
       
     } catch (err) {

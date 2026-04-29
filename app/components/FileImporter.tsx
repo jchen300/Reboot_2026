@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { processTransactionFile } from "@/lib/file-processor";
+import { useSWRConfig } from "swr";
+import { useAuth } from "@/context/AuthContext";
 
 interface FileImporterProps {
   onSuccess: () => Promise<void>; // 匯入成功後告訴 Page 刷新
@@ -12,11 +14,15 @@ export function FileImporter({ onSuccess }: FileImporterProps) {
   const [previewData, setPreviewData] = useState<any[]>([]);
   const [filename, setFilename] = useState("");
   const [isReclassifying, setIsReclassifying] = useState(false);
+  const { token } = useAuth();
+  const { mutate } = useSWRConfig();
   const handleReclassify = async () => {
     setIsReclassifying(true);
     try {
       const res = await fetch("/api/transactions/reclassify", { method: "POST" });
       if (!res.ok) throw new Error("重新分類失敗");
+      mutate(['/api/transactions', token]);
+      mutate(['/api/stats/categories', token]);
       await onSuccess();
       alert("重新分類完成");
     } catch (err) {
@@ -53,6 +59,8 @@ export function FileImporter({ onSuccess }: FileImporterProps) {
       });
 
       if (res.ok) {
+        mutate(['/api/transactions', token]);
+        mutate(['/api/stats/categories', token]);
         await onSuccess();
         setPreviewData([]);
         setStatus("idle");
