@@ -21,23 +21,48 @@ const getFingerprint = (item: any) => {
 
 export async function GET(req: NextRequest) {
   try {
-    // 1. 從 Header 拿到 Authorization: Bearer user_001
     const authHeader = req.headers.get("authorization");
-    const token = authHeader?.split(" ")[1]; // 這裡會拿到 "user_001"
+    const token = authHeader?.split(" ")[1]; 
 
     if (!token) {
       return NextResponse.json({ error: "請先登入" }, { status: 401 });
     }
 
-    const collection = await getTransactionsCollection();
+    const { searchParams } = new URL(req.url);
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '10');
+    const query = searchParams.get('q') || '';
+    const skip = (page - 1) * limit;
 
-    // 2. 關鍵：查詢時必須帶上 userId
+    // 💡 這裡最關鍵：請確認資料庫欄位名。如果舊資料是 userId，這裡就寫 userId
+    const filter: any = { userId: token }; 
+
+    if (query) {
+      filter.$or = [
+        { product: { $regex: query, $options: 'i' } }, 
+        { category: { $regex: query, $options: 'i' } }
+      ];
+    }
+
+    const collection = await getTransactionsCollection();
+    const totalCount = await collection.countDocuments(filter);
+    
     const transactions = await collection
-      .find({ userId: token } as any) // 使用 token 作為 userId 過濾
-      .sort({ tradeTime: -1 })
+      .find(filter)
+      .sort({ tradeTime: -1 }) // 建議按交易時間倒序
+      .skip(skip)
+      .limit(limit)
       .toArray();
 
-    return NextResponse.json(transactions);
+    return NextResponse.json({
+      data: transactions,
+      pagination: {
+        total: totalCount,
+        page,
+        limit,
+        totalPages: Math.ceil(totalCount / limit)
+      }
+    });
   } catch (error) {
     return NextResponse.json({ error: "讀取失敗" }, { status: 500 });
   }
