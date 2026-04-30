@@ -8,23 +8,17 @@ import { useTransactions } from "@/hooks/use-transactions";
 
 interface TransactionTableProps {
   rows: any[];
+  summary: any;
   onDataChange: () => Promise<void>;
 }
 
-export function TransactionTable({ rows=[], onDataChange }: TransactionTableProps) {
+export function TransactionTable({ rows=[],summary, onDataChange }: TransactionTableProps) {
   const { deleteOne, deleteMany } = useTransactions();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isLocalBusy, setIsLocalBusy] = useState(false); // 💡 增加本地的 loading 狀態
   // 1. 計算合計金額 (Memoized 避免不必要重算)
-  const total = useMemo(() => {
-
-    return rows.reduce((sum, r) => {
-      const sign = r.direction === "income" ? 1 : -1;
-      // 💡 確保 r.amount 存在，不然會變成 NaN
-      const amount = Number(r.amount) || 0; 
-      return sum + sign * amount;
-    }, 0);
-  }, [rows]);
+  const total =summary?.netFlow || 0;
+  console.log("TransactionTable summary:", summary);
 
   // 2. 勾選邏輯
   const toggleAll = (checked: boolean) => {
@@ -82,7 +76,7 @@ export function TransactionTable({ rows=[], onDataChange }: TransactionTableProp
           <div>
             <span className="text-[10px] text-zinc-400 font-black uppercase tracking-tighter block">Snapshot</span>
             <div className="text-sm text-zinc-600 font-medium">
-              <span className="text-zinc-900">{rows?.length}</span> Transactions
+              <span className="text-zinc-900">{summary?.totalCount}</span> Transactions
             </div>
           </div>
 

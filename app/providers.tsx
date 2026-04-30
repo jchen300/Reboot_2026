@@ -13,6 +13,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         revalidateOnFocus: false, // 💡 視窗聚焦時不自動重抓 (看你需求)
         dedupingInterval: 3000,   // 💡 3秒內重複的請求直接併發處理
         shouldRetryOnError: false, // 💡 失敗後不反覆重試，減少 API 負擔
+        keepPreviousData: true
       }}
     >
       {children}

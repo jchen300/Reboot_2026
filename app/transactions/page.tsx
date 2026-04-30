@@ -5,15 +5,25 @@ import { TransactionTable } from "@/app/components/TransactionTable";
 import { AddTransactionForm } from "@/app/components/AddTransactionForm";
 import { FileImporter } from "@/app/components/FileImporter";
 import { useAuth } from "@/context/AuthContext";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function TransactionPage() {
   const { loading } = useAuth();
   const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState(""); // 用於綁定 Input 框
   const [searchQuery, setSearchQuery] = useState("");
-  // 💡 現在數據獲取是自動化的，不再需要依賴 useEffect 手動 refresh
-  const { rows, pagination, loading: dataLoading, refresh } = useTransactions(page, searchQuery);
 
+  const handleSearch = () => {
+    setSearchQuery(searchInput);
+    setPage(1); // 搜尋時重置回第一頁
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleSearch();
+  };
+  // 💡 現在數據獲取是自動化的，不再需要依賴 useEffect 手動 refresh
+  const { rows, pagination, summary, loading: dataLoading, refresh } = useTransactions(page, searchQuery);
+  console.log("TransactionPage pagination:", pagination);
   // 如果正在驗證身分，顯示簡單的加載狀態
   if (loading) {
     return <div className="p-10 text-center text-zinc-400">驗證身分中...</div>;
@@ -34,12 +44,19 @@ export default function TransactionPage() {
                   type="text"
                   placeholder="搜尋描述或分類..."
                   className="w-full sm:w-64 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-200 transition-all"
-                  value={searchQuery}
+                  value={searchInput}
                   onChange={(e) => {
-                    setSearchQuery(e.target.value);
+                    setSearchInput(e.target.value);
                     setPage(1); // 搜尋時重置回第一頁
                   }}
+                  onKeyDown={handleKeyDown}
                 />
+                <button 
+                  onClick={handleSearch}
+                  className="rounded-xl bg-zinc-900 px-6 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 active:scale-95 transition-all shadow-sm"
+                >
+                  搜尋
+                </button>
               </div>
             
             {/* 💡 當新增成功後，呼叫 refresh (mutate) 讓 SWR 更新全站數據 */}
@@ -56,15 +73,12 @@ export default function TransactionPage() {
             {dataLoading && rows?.length === 0 ? (
               <div className="p-10 text-center text-zinc-400">讀取數據中...</div>
             ) : (
-              <TransactionTable rows={rows} onDataChange={refresh} />
+              <TransactionTable rows={rows} summary={summary} onDataChange={refresh} />
               
             )}
             {/* --- 分頁按鈕 --- */}
                 <div className="flex items-center justify-between px-2 py-4">
-                  <p className="text-sm text-zinc-500">
-                    共 {pagination?.total || 0} 筆紀錄
-                  </p>
-                  
+                  <p></p>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setPage(p => Math.max(1, p - 1))}

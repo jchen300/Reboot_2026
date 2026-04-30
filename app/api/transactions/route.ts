@@ -35,32 +35,50 @@ export async function GET(req: NextRequest) {
     const skip = (page - 1) * limit;
 
     // 💡 這裡最關鍵：請確認資料庫欄位名。如果舊資料是 userId，這裡就寫 userId
-    const filter: any = { userId: token }; 
+    const searchFilter: any = { userId: token };
 
     if (query) {
-      filter.$or = [
-        { product: { $regex: query, $options: 'i' } }, 
+      searchFilter.$or = [
+        { product: { $regex: query, $options: 'i' } },
         { category: { $regex: query, $options: 'i' } }
       ];
     }
 
     const collection = await getTransactionsCollection();
-    const totalCount = await collection.countDocuments(filter);
-    
-    const transactions = await collection
-      .find(filter)
-      .sort({ tradeTime: -1 }) // 建議按交易時間倒序
-      .skip(skip)
-      .limit(limit)
-      .toArray();
+// 💡 3. 使用 Promise.all 同時執行多項查詢
+    const [transactions, searchStats] = await Promise.all([
+      // A. 抓取分頁資料
+      collection.find(searchFilter).sort({ tradeTime: -1 }).skip(skip).limit(limit).toArray(),
+      
+      // B. 算「全局」總計（不論搜尋與否）
+      collection.aggregate([
+        { $match: searchFilter },
+        {
+          $group: {
+            _id: null,
+            count: { $sum: 1 },
+            income: { $sum: { $cond: [{ $eq: ["$direction", "income"] }, "$amount", 0] } },
+            expense: { $sum: { $cond: [{ $eq: ["$direction", "expense"] }, "$amount", 0] } }
+          }
+        }
+      ]).toArray()
+
+    ]);
+
+   const stats = searchStats[0] || { count: 0, income: 0, expense: 0 };
+    const netFlow = Number((stats.income - stats.expense).toFixed(2));
+ 
 
     return NextResponse.json({
       data: transactions,
+      summary: {
+        totalCount: stats.count, // 這是搜尋後的總筆數
+        netFlow: netFlow         // 這是搜尋後的淨流向
+      },
       pagination: {
-        total: totalCount,
         page,
         limit,
-        totalPages: Math.ceil(totalCount / limit)
+        totalPages: Math.ceil(stats.count / limit)
       }
     });
   } catch (error) {

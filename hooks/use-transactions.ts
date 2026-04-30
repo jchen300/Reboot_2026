@@ -54,6 +54,7 @@ export function useTransactions(page = 1, searchQuery = "") {
         rows:data?.data || [], // 💡 從 API 回傳的資料結構中取出 rows
         loading:isLoading || loading,
         pagination: data?.pagination,
+        summary:data?.summary,
         error,
         refresh:mutate,
         deleteOne,
