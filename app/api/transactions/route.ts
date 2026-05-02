@@ -34,6 +34,10 @@ export async function GET(req: NextRequest) {
     const query = searchParams.get('q') || '';
     const skip = (page - 1) * limit;
 
+    const col = await getTransactionsCollection();
+    const sample = await col.findOne({}, { sort: { createdAt: -1 } });
+    console.log("資料庫真實結構:", JSON.stringify(sample, null, 2));
+
     // 💡 這裡最關鍵：請確認資料庫欄位名。如果舊資料是 userId，這裡就寫 userId
     const searchFilter: any = { userId: token };
 
@@ -86,16 +90,28 @@ export async function GET(req: NextRequest) {
   }
 }
 
+// app/api/transactions/route.ts
+
 export async function POST(req: Request) {
   try {
+    // 1. 統一 Token 解析邏輯 (對齊你的 GET function)
+    const authHeader = req.headers.get("authorization");
+    const userId = authHeader?.split(" ")[1]; // 這裡是你的 userId token
+
+    if (!userId) {
+      return NextResponse.json({ error: "請先登入 (缺少 Token)" }, { status: 401 });
+    }
+
     const body = await req.json();
     const col = await getTransactionsCollection();
     
-    // 統一轉為陣列處理，簡化邏輯
+    // 統一轉為陣列處理
     const rawItems = Array.isArray(body) ? body : [body];
 
-    // 1. 數據庫去重比對
+    // 2. 數據庫去重比對 (關鍵：必須加上 userId)
+    // 這樣不同的用戶即便有相同的消費紀錄，也不會互相衝突
     const existingDocs = await col.find({
+      userId: userId, 
       $or: rawItems.map(item => ({
         tradeTime: new Date(item.tradeTime),
         product: String(item.product).trim(),
@@ -104,8 +120,6 @@ export async function POST(req: Request) {
     }).toArray();
 
     const existingFingerprints = new Set(existingDocs.map(getFingerprint));
-
-    // 過濾掉重複項
     const newItems = rawItems.filter(item => !existingFingerprints.has(getFingerprint(item)));
   
     if (newItems.length === 0) {
@@ -116,44 +130,45 @@ export async function POST(req: Request) {
       });
     }
 
-    // 2. AI 分類處理 (分組併發)
+    // 3. AI 分類處理 (分組併發)
     const chunks = chunkArray(newItems, 50);
-    const finalDocs = []; // 用來存放所有處理完的數據
+    const finalDocs = [];
 
-    // 使用 for...of 進行「序列化（串行）」處理
-    for (const [index,chunk] of chunks.entries()) {
+    for (const [index, chunk] of chunks.entries()) {
       const productNames = chunk.map(item => item.product);
-      
-      // 等待當前這一組 AI 分類完成後，才進入下一組
       const categories = await batchClassify(productNames);
 
-      const processedChunk = chunk.map((item, index) => {
-      const cat = categories[index];
-      const isFailed = !cat || cat === "錯誤";  
-      return {
-        tradeTime: new Date(item.tradeTime),
-        product: String(item.product || "").trim(),
-        amount: Number(item.amount),
-        direction: item.direction || "expense", // 預設為支出
-        source: (Array.isArray(body) ? "import" : "manual") as any,
-        category: categories[index] || "其他支出",
-        aiStatus: isFailed? true: false, // 這裡可以根據 batchClassify 的結果來標記
-        createdAt: new Date(),
-    }});
+      const processedChunk = chunk.map((item, i) => {
+        const cat = categories[i];
+        const isFailed = !cat || cat === "錯誤";  
+        return {
+          userId: userId,              // 👈 核心修正：存入與 GET 相同的 userId
+          tradeTime: new Date(item.tradeTime),
+          product: String(item.product || "").trim(),
+          amount: Number(item.amount),
+          direction: item.direction || "expense",
+          source: (Array.isArray(body) ? "import" : "manual"),
+          category: cat || "其他支出",
+          aiStatus: isFailed, 
+          createdAt: new Date(),
+        };
+      });
+
       if (index < chunks.length - 1) {
-        await sleep(3000); // 停止 3 秒，這能大幅降低 429 報錯機率
+        await sleep(3000); // 避免 AI API 429 報錯
       }
 
       finalDocs.push(...processedChunk);
     }
 
-    // 3. 寫入資料庫
+    // 4. 寫入資料庫
     const result = await col.insertMany(finalDocs);
+    
     return NextResponse.json({
       success: true,
       count: result.insertedCount,
       skipped: rawItems.length - newItems.length,
-      data: finalDocs // 回傳處理後的資料給前端
+      data: finalDocs 
     });
 
   } catch (error) {
@@ -161,7 +176,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "處理失敗" }, { status: 500 });
   }
 }
-
 
 export async function DELETE(req: Request) {
   try {
